@@ -8,9 +8,7 @@ param(
    [Parameter(Mandatory=$true)]
    [string]$vcenter_username,
    [Parameter(Mandatory=$true)]
-   [string]$vcenter_password,
-   [Parameter(Mandatory=$true)]
-   [string]$vcloud_portal_name   
+   [string]$vcenter_password
 )
 
 #===========================================================================
@@ -32,16 +30,6 @@ if($test -eq $false){
 }
 else{
     Write-Host "Transcripts folder checked..."
-}
-
-# CHECK FOR THE BACKUPS FOLDER AND CREATE IF IT DOES NOT EXIST
-$test = Test-Path .\BACKUPS
-if($test -eq $false){
-   Write-Host "Creating backups folder...."
-   New-Item -ItemType Directory -Name backups | Out-Null
-}
-else{
-   Write-Host "Backups folder checked..."
 }
 
 # START SCRIPT TRANSCRIPTION
