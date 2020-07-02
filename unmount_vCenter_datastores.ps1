@@ -128,6 +128,17 @@ foreach($datastore in $datastores){
       Write-Host "No Template VMs" $datastore.datastore_name -NoNewline
       write-host "   FAILED" -ForegroundColor Red
       $error_count += 1
+   }  
+   
+   #CHECK IF DATASTORE IS IN A DATASTORE CLUSTER
+   if($null -eq (Get-DatastoreCluster -ErrorAction SilentlyContinue | Get-Datastore -Name $datastore.datastore_name -ErrorAction SilentlyContinue)){
+      Write-Host $datastore.datastore_name "not a member of datastore cluster" -NoNewline
+      write-host "   PASSED" -ForegroundColor Green
+   }
+   else {
+      Write-Host $datastore.datastore_name "not a member of datastore cluster" -NoNewline
+      write-host "   FAILED" -ForegroundColor Red
+      $error_count += 1
    }   
    write-host ""
 }
@@ -138,14 +149,52 @@ if($error_count -ne 0){
    exit
 }
 
+Write-Host "################################"
+Write-Host "DATASTORES READY FOR REMOVAL..."
+Write-Host "################################"
+$datastores | Format-Table
+
+$choice = Read-Host -Prompt "Do you want to proceed with removal? (y/N)"
+if($choice.ToUpper() -ne "Y"){
+   Read-Host -Prompt "Press any key to exit..."
+   Exit
+}
+else{
+   Write-Host "Changes Confirmed..."
+   Start-Sleep -Seconds 3
+}
+
 #===========================================================================
 # DELETION 
 #===========================================================================
 
+$esxi_hosts = Get-VMHost
+foreach($esxi_host in $esxi_hosts){
+   foreach($datastore in $datastores){
+      if($null -ne ($esxi_host | Get-Datastore)){ 
+         Write-Host "Gathering UUID info..."
+         $vmfs_uuid = (Get-Datastore $datastore.datastore_name).ExtensionData.info.Vmfs.uuid
+         $lun_uuid = (Get-Datastore $datastore.datastore_name | Get-ScsiLun).ExtensionData.uuid
+         $host_storage_system = Get-View $esxi_host.Extensiondata.ConfigManager.StorageSystem
+
+         Write-Host "Unmounting" $datastore.datastore_name "from host $esxi_host..."
+         $host_storage_system.UnmountVmfsVolume($vmfs_uuid) | Out-Null
+
+         Write-Host "Detatching" $datastore.datastore_name "from host $esxi_host..."
+         $host_storage_system.DetachScsiLun($lun_uuid) | Out-Null
+
+         Write-Host "Rescanning storage on host $esxi_host..."
+         $esxi_host | Get-VMHostStorage -RescanAllHba -RescanVmfs | Out-Null
+      }
+   }   
+}
+write-host "Removals COMPLETE..."
+write-host ""
+
 # DISCONNECT FROM VCENTER
 Write-Host "Disconnecting from vCenter..."
-# disconnect-viserver -Confirm:$false
+disconnect-viserver -Confirm:$false
 
 # PROMPT TO CLOSE THE SHELL
-# Read-Host -Prompt "Press any key to exit..."
-# exit
+Read-Host -Prompt "Press any key to exit..."
+exit
